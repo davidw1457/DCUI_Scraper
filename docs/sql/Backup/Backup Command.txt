@@ -1,0 +1,2 @@
+cd "C:\Program Files\MySQL\MySQL Server 8.0\bin"
+mysqldump dcui --user=[USERNAME] --password --result-file=[BACKUP PATH\FILENAME.SQL]

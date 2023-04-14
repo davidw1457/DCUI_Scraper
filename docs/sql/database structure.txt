@@ -1,0 +1,22 @@
+series
+series_id; title; issue_count; series_url; current
+
+issues
+series_id; issue_id; publication_date; issue_url
+
+creators
+creator_id; creator_name
+
+issue_creators
+issue_id; creator_id
+
+
+FUTURE DATA:
+issues
+description, rating, pages
+
+issue_creators
+position_id
+
+positions
+position_id, position_title [writer/penciller/inker/cover artist]
