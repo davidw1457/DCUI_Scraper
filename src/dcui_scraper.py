@@ -17,70 +17,70 @@ class DCUIScraper:
     _months = {"JAN": "01", "FEB": "02", "MAR": "03", "APR": "04",
                "MAY": "05", "JUN": "06", "JUL": "07", "AUG": "08",
                "SEP": "09", "OCT": "10", "NOV": "11", "DEC": "12"}
+    FIELD_UPDATE = {}
 
-    def __init__(self, user, password):
-        connection = {"database": "dcui_temp", "user": user
+    def __init__(self, user, password, databaseName="dcui"):
+        connection = {"database": databaseName, "user": user
                       , "password": password}
         self._dcui_database = database.Database(connection)
 
     def update_all_series(self):
-        with webdriver.Chrome() as driver:
-            driver.get("https://www.dcuniverseinfinite.com/browse/comics")
-            self._fully_load(driver)
-            source = bs4.BeautifulSoup(markup=driver.page_source,
-                                       features="html.parser")
-            for series in source.find_all(class_=
-                                        "thumbnail__description-container"):
-                series_metadata = {}
-                series_metadata["series_title"] = (series
-                                                   .find("h3")
-                                                   .next_element
-                                                   .replace("'","''"))
-                series_metadata["series_url"] = ("https://www."
-                                                 "dcuniverseinfinite.com"
-                                                 + series.find("a")["href"])
-                series_metadata["series_url_id"] = (series_metadata
-                                                    ["series_url"][-36:])
-                series_metadata["date_updated"] = (datetime
-                                                   .datetime
-                                                   .today()
-                                                   .date())
-                series_metadata["issue_count"] = self._get_issue_count(series_metadata["series_url_id"])
+        source = self._open_page(("https://www.dcuniverseinfinite.com/browse/"
+                                 "comics"), True)
+        for series in source.find_all(class_=
+                                    "thumbnail__description-container"):
+            series_metadata = {}
+            series_metadata["series_title"] = (series
+                                                .find("h3")
+                                                .next_element
+                                                .replace("'","''"))
+            series_metadata["series_url"] = ("https://www."
+                                                "dcuniverseinfinite.com"
+                                                + series.find("a")["href"])
+            series_metadata["series_url_id"] = (series_metadata
+                                                ["series_url"][-36:])
+            series_metadata["date_updated"] = (datetime
+                                                .datetime
+                                                .today()
+                                                .date())
+            series_metadata["issue_count"] = (self
+                                              ._get_issue_count
+                                              (series_metadata["series_url_id"]))
 
-                sql = ("SELECT series_id, issue_count FROM series WHERE "
-                       "series_title = '{series_title}' AND series_url = "
-                       "'{series_url}';").format(**series_metadata)
+            sql = ("SELECT series_id, issue_count FROM series WHERE "
+                    "series_title = '{series_title}' AND series_url = "
+                    "'{series_url}';").format(**series_metadata)
+            results = self._dcui_database.select(sql)
+
+            if len(results) == 0:
+                sql = (("SELECT series_url_id FROM series WHERE "
+                        "series_url_id = '{series_url_id}';")
+                        .format(**series_metadata))
                 results = self._dcui_database.select(sql)
-
                 if len(results) == 0:
-                    sql = (("SELECT series_url_id FROM series WHERE "
-                           "series_url_id = '{series_url_id}';")
-                           .format(**series_metadata))
-                    results = self._dcui_database.select(sql)
-                    if len(results) == 0:
-                        sql = ("INSERT INTO series (series_title, series_url, "
-                               "series_url_id, issue_count, date_updated) "
-                               "VALUES ('{series_title}', '{series_url}', "
-                               "'{series_url_id}', {issue_count}, "
-                               "'{date_updated}');").format(**series_metadata)
-                        self._dcui_database.insert(sql)
+                    sql = ("INSERT INTO series (series_title, series_url, "
+                            "series_url_id, issue_count, date_updated) "
+                            "VALUES ('{series_title}', '{series_url}', "
+                            "'{series_url_id}', {issue_count}, "
+                            "'{date_updated}');").format(**series_metadata)
+                    self._dcui_database.insert(sql)
+            else:
+                series_metadata["series_id"] = results[0]["series_id"]
+            
+                if (int(results[0]["issue_count"]) !=
+                        series_metadata["issue_count"]):
+                    sql = (("UPDATE series SET issue_count = "
+                            "{issue_count}, date_updated = "
+                            "'{date_updated}', need_update = 1 WHERE "
+                            "series_id = {series_id};")
+                            .format(**series_metadata))
                 else:
-                    series_metadata["series_id"] = results[0]["series_id"]
+                    sql = (("UPDATE series SET date_updated = "
+                            "'{date_updated}', need_update = 0 WHERE "
+                            "series_id = {series_id};")
+                            .format(**series_metadata))
                 
-                    if (int(results[0]["issue_count"]) !=
-                            series_metadata["issue_count"]):
-                        sql = (("UPDATE series SET issue_count = "
-                                "{issue_count}, date_updated = "
-                                "'{date_updated}', need_update = 1 WHERE "
-                                "series_id = {series_id};")
-                                .format(**series_metadata))
-                    else:
-                        sql = (("UPDATE series SET date_updated = "
-                               "'{date_updated}', need_update = 0 WHERE "
-                               "series_id = {series_id};")
-                               .format(**series_metadata))
-                    
-                    self._dcui_database.update(sql)
+                self._dcui_database.update(sql)
     
     def update_all_issues(self):
         sql = ("SELECT series_id, series_url, issue_count, series_url_id FROM "
@@ -90,21 +90,8 @@ class DCUIScraper:
             self.update_issues(**row)
 
     def update_issues(self, series_id, series_url, issue_count, series_url_id):
-        with webdriver.Chrome() as driver:
-            driver.get(series_url)
-            self._fully_load(driver)
-            try:
-                for x in range(2, 4):
-                    clickable = (driver
-                                 .find_element(By.CSS_SELECTOR,
-                                               f".tab-nav-item:nth-child({x})"))
-                    webdriver.ActionChains(driver).click(clickable).perform()
-                    self._fully_load(driver)
-            except:
-                pass
-
-            source = bs4.BeautifulSoup(markup=driver.page_source,
-                                       features="html.parser")
+        source = self._open_page(series_url, True, True)
+        
         for item in zip((source.find_all
                          (class_="thumbnail__description-container")),
                          source.find_all(class_="thumbnail__container")):
@@ -182,13 +169,8 @@ class DCUIScraper:
                 self._dcui_database.update(sql)
 
     def update_issues_fallback(self, series_id, series_url_id):
-        with webdriver.Chrome() as driver:
-            driver.get("https://www.dcuniverseinfinite.com/browse/comics"
-                        f"?series={series_url_id}")
-            self._fully_load(driver)
-            source = bs4.BeautifulSoup(markup=driver.page_source,
-                                       features="html.parser")
-        
+        source = self._open_page(("https://www.dcuniverseinfinite.com/"
+                        f"browse/comics?series={series_url_id}"), True)
         for item in zip((source.find_all
                          (class_="thumbnail__description-container")),
                          source.find_all(class_="thumbnail__container")):
@@ -221,12 +203,51 @@ class DCUIScraper:
                               "'{subscription}')").format(**issue_metadata)
                 self._dcui_database.insert(insert_sql)
 
+    def _update_publication_date(self, records):
+        for record in records:
+            publication_date = self._get_publication_date(record["issue_url"])
+            if (publication_date != record["publication_date"]):
+                issue_id = record["issue_id"]
+                sql = (f"UPDATE issue SET publication_date = {publication_date} "
+                       f"WHERE issue_id = {issue_id}")
+                self._dcui_database.update(sql)
+
+    FIELD_UPDATE["publication_date"] = _update_publication_date
+
+    def update_subset(self, select_criteria, update_field):
+        if self.FIELD_UPDATE.get(update_field) == None:
+            raise NotImplementedError
+        
+        sql = f"SELECT issue_id, issue_url, {update_field} FROM issue WHERE {select_criteria};"
+        results = self._dcui_database.select(sql)
+        self.FIELD_UPDATE.get(update_field)(results)
+
+    @classmethod
+    def _open_page(cls, url, fully_load=False, series_page = False):
+        with webdriver.Chrome() as driver:
+            driver.get(url)
+            if fully_load:
+                cls._fully_load(driver)
+            if series_page:
+                try:
+                    for x in range(2, 4):
+                        clickable = (driver
+                                    .find_element
+                                    (By.CSS_SELECTOR,
+                                     f".tab-nav-item:nth-child({x})"))
+                        (webdriver
+                         .ActionChains(driver)
+                         .click(clickable)
+                         .perform())
+                        cls._fully_load(driver)
+                except:
+                    pass
+            return bs4.BeautifulSoup(markup=driver.page_source,
+                                     features="html.parser")
+
     @classmethod
     def _get_publication_date(cls, issue_url, **kwargs):
-        with webdriver.Chrome() as driver:
-            driver.get(issue_url)
-            source = bs4.BeautifulSoup(markup=driver.page_source,
-                                       features="html.parser")
+        source = cls._open_page(issue_url)
         try:
             pub_date = (source
                         .find(class_=("comic-issue__info-container "
@@ -240,8 +261,6 @@ class DCUIScraper:
         except:
             return "1901-01-01"
             
-
-
     @classmethod
     def _fully_load(cls, driver):
         pageLen = -1
@@ -260,13 +279,10 @@ class DCUIScraper:
         driver.execute_script(cls._SCROLL_TO_TOP)
         time.sleep(1)
     
-    @staticmethod
-    def _get_issue_count(series_url_id):
-        with webdriver.Chrome() as driver:
-            driver.get(("https://www.dcuniverseinfinite.com/browse/comics"
-                        f"?series={series_url_id}"))
-            source = bs4.BeautifulSoup(markup=driver.page_source,
-                                       features="html.parser")
+    @classmethod
+    def _get_issue_count(cls, series_url_id):
+        source = cls._open_page(("https://www.dcuniverseinfinite.com/browse/"
+                                 f"comics?series={series_url_id}"))
         try:
             issue_count = int((source
                     .find(class_="category-name")
@@ -282,6 +298,8 @@ def main():
     dcui_scraper = DCUIScraper(input("User: "), getpass.getpass("Password: "))
     # dcui_scraper.update_all_series()
     # dcui_scraper.update_all_issues()
+    dcui_scraper.update_subset(select_criteria="publication_date='1901-01-01'"
+                               , update_field="publication_date")
 
 if __name__ == "__main__":
     main()
