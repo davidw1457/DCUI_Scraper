@@ -220,8 +220,11 @@ class DCUIScraper:
             if (publication_date != str(record["publication_date"])):
                 issue_id = record["issue_id"]
                 sql = ("UPDATE issue SET publication_date = "
-                       f"{publication_date} WHERE issue_id = {issue_id}")
-                self._dcui_database.update(sql)
+                       f"'{publication_date}' WHERE issue_id = {issue_id}")
+                try:
+                    self._dcui_database.update(sql)
+                except:
+                    print(f"SQL error: {sql}")
 
     @classmethod
     def _open_page(cls, url, fully_load=False, series_page = False):
