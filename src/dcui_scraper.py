@@ -23,6 +23,7 @@ class DCUIScraper:
         connection = {"database": databaseName, "user": user
                       , "password": password}
         self._dcui_database = database.Database(connection)
+        self.FIELD_UPDATE["publication_date"] = self._update_publication_date
 
     def update_all_series(self):
         source = self._open_page(("https://www.dcuniverseinfinite.com/browse/"
@@ -203,24 +204,24 @@ class DCUIScraper:
                               "'{subscription}')").format(**issue_metadata)
                 self._dcui_database.insert(insert_sql)
 
-    def _update_publication_date(self, records):
-        for record in records:
-            publication_date = self._get_publication_date(record["issue_url"])
-            if (publication_date != record["publication_date"]):
-                issue_id = record["issue_id"]
-                sql = (f"UPDATE issue SET publication_date = {publication_date} "
-                       f"WHERE issue_id = {issue_id}")
-                self._dcui_database.update(sql)
-
-    FIELD_UPDATE["publication_date"] = _update_publication_date
-
     def update_subset(self, select_criteria, update_field):
         if self.FIELD_UPDATE.get(update_field) == None:
             raise NotImplementedError
         
-        sql = f"SELECT issue_id, issue_url, {update_field} FROM issue WHERE {select_criteria};"
+        sql = (f"SELECT issue_id, issue_url, {update_field} FROM issue WHERE "
+               f"{select_criteria};")
         results = self._dcui_database.select(sql)
-        self.FIELD_UPDATE.get(update_field)(results)
+        func = self.FIELD_UPDATE.get(update_field)
+        func(results)
+
+    def _update_publication_date(self, records):
+        for record in records:
+            publication_date = self._get_publication_date(record["issue_url"])
+            if (publication_date != str(record["publication_date"])):
+                issue_id = record["issue_id"]
+                sql = ("UPDATE issue SET publication_date = "
+                       f"{publication_date} WHERE issue_id = {issue_id}")
+                self._dcui_database.update(sql)
 
     @classmethod
     def _open_page(cls, url, fully_load=False, series_page = False):
