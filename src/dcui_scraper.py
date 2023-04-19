@@ -269,13 +269,19 @@ class DCUIScraper:
     def _fully_load(cls, driver):
         pageLen = -1
         newPageLen = driver.execute_script(cls._SCROLL_TO_BOTTOM)
-        #for i in range(1):
         while pageLen != newPageLen:
             pageLen = newPageLen
             driver.execute_script(cls._SCROLL_UP)
             newPageLen = driver.execute_script(cls._SCROLL_TO_BOTTOM)
             time.sleep(1)
             if (pageLen == newPageLen):
+                try:
+                    clickable = (driver.find_element(
+                                            By.ID,
+                                            "embeddable-modal-accept-button"))
+                    webdriver.ActionChains(driver).click(clickable).perform()
+                except:
+                    pass
                 driver.execute_script(cls._SCROLL_TO_TOP)
                 newPageLen = (driver
                               .execute_script(cls._SCROLL_TO_BOTTOM))
@@ -300,10 +306,10 @@ class DCUIScraper:
 
 def main():
     dcui_scraper = DCUIScraper(input("User: "), getpass.getpass("Password: "))
-    # dcui_scraper.update_all_series()
-    # dcui_scraper.update_all_issues()
-    dcui_scraper.update_subset(select_criteria="publication_date='1901-01-01'"
-                               , update_field="publication_date")
+    dcui_scraper.update_all_series()
+    dcui_scraper.update_all_issues()
+    # dcui_scraper.update_subset(select_criteria="publication_date='1901-01-01'"
+    #                            , update_field="publication_date")
 
 if __name__ == "__main__":
     main()
