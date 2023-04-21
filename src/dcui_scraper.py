@@ -6,6 +6,7 @@ import time
 import database
 import getpass
 import re
+import logging
 
 class DCUIScraper:
 
@@ -24,12 +25,19 @@ class DCUIScraper:
                       , "password": password}
         self._dcui_database = database.Database(connection)
         self.FIELD_UPDATE["publication_date"] = self._update_publication_date
+        logging.basicConfig(filename="dcui_scraper.log",
+                            format="%(asctime)s %(message)s",
+                            filemode="w")
 
     def update_all_series(self):
         source = self._open_page(("https://www.dcuniverseinfinite.com/browse/"
                                  "comics"), True)
+        series_count = len(source
+                           .find_all(class_ = "thumbnail__description-container"))
+        current_series = 0
         for series in source.find_all(class_=
                                     "thumbnail__description-container"):
+            current_series += 1
             series_metadata = {}
             series_metadata["series_title"] = (series
                                                 .find("h3")
@@ -44,6 +52,19 @@ class DCUIScraper:
                                                 .datetime
                                                 .today()
                                                 .date())
+            logging.info(("Updating series {current_series} of {series_count}: "
+                          "Title: {series_title} URL: {series_url}")
+                          .format(current_series = current_series,
+                                  series_count = series_count,
+                                  **series_metadata))
+            
+            sql = ("SELECT date_updated FROM series WHERE series_url_id = "
+                   "'{series_url_id}';").format(**series_metadata)
+            results = self._dcui_database.select(sql)
+            if (len(results) > 0 and
+                results[0]["date_updated"] == series_metadata["date_updated"]):
+                continue
+
             series_metadata["issue_count"] = (self
                                               ._get_issue_count
                                               (series_metadata["series_url_id"]))
@@ -87,7 +108,15 @@ class DCUIScraper:
         sql = ("SELECT series_id, series_url, issue_count, series_url_id FROM "
                "series WHERE need_update = 1;")
         results = self._dcui_database.select(sql)
+        series_count = len(results)
+        current_series = 0
         for row in results:
+            current_series += 1
+            logging.info(("Updating issues for series {current_series} of "
+                          "{series_count}: series_id: {series_id} series_url: "
+                          "{series_url}").format(current_series = current_series,
+                                                 series_count = series_count,
+                                                 **row))
             self.update_issues(**row)
 
     def update_issues(self, series_id, series_url, issue_count, series_url_id):
