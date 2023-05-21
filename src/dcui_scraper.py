@@ -188,15 +188,15 @@ class DCUIScraper:
                                   .format(issue_id, creator))
                     self._dcui_database.insert(insert_sql)
 
-            sql = ("SELECT count(*) as database_count FROM issue WHERE "
-                   f"series_id = {series_id};")
-            results = self._dcui_database.select(sql)
-            if results[0]["database_count"] != issue_count:
-                self.update_issues_fallback(series_id, series_url_id)
-            else:
-                sql = ("UPDATE series SET need_update = 0 WHERE series_id = "
-                       f"{series_id};")
-                self._dcui_database.update(sql)
+        sql = ("SELECT count(*) as database_count FROM issue WHERE "
+                f"series_id = {series_id};")
+        results = self._dcui_database.select(sql)
+        if results[0]["database_count"] != issue_count:
+            self.update_issues_fallback(series_id, series_url_id)
+        else:
+            sql = ("UPDATE series SET need_update = 0 WHERE series_id = "
+                    f"{series_id};")
+            self._dcui_database.update(sql)
 
     def update_issues_fallback(self, series_id, series_url_id):
         source = self._open_page(("https://www.dcuniverseinfinite.com/"
