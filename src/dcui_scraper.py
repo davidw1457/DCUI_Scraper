@@ -152,9 +152,8 @@ class DCUIScraper:
                 issue_metadata["subscription"] = "Basic"
             else:
                 issue_metadata["subscription"] = subscription.next_element
-            sql = (("SELECT issue_id FROM issue WHERE series_id = "
-                           "{series_id} and issue_url_id = '{issue_url_id}';")
-                           .format(**issue_metadata))
+            sql = (("SELECT issue_id FROM issue WHERE issue_url_id = "
+                            "'{issue_url_id}';").format(**issue_metadata))
             results = self._dcui_database.select(sql)
             if len(results) == 0:
                 insert_sql = ("INSERT INTO issue (series_id, issue_title, "
@@ -257,7 +256,9 @@ class DCUIScraper:
 
     @classmethod
     def _open_page(cls, url, fully_load=False, series_page = False):
-        with webdriver.Chrome() as driver:
+        options = webdriver.ChromeOptions()
+        options.add_experimental_option('excludeSwitches', ['enable-logging'])
+        with webdriver.Chrome(options=options) as driver:
             driver.get(url)
             if fully_load:
                 cls._fully_load(driver)
@@ -326,7 +327,8 @@ class DCUIScraper:
             issue_count = int((source
                     .find(class_="category-name")
                     .next_element
-                    .split("(")[1][:-1]))
+                    .split("(")[1]
+                    .strip()[:-1]))
             return issue_count
         except:
             print(f"Get Issue Count failed for {series_url_id}\n")
