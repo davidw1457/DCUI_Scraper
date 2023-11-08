@@ -1,6 +1,7 @@
 import mysql.connector
 
-class Database():
+
+class Database:
 
     def __init__(self, connection):
         self._db = mysql.connector.connect(**connection)
@@ -12,8 +13,8 @@ class Database():
             pass
 
     @staticmethod
-    def _bad_statement(sql, type):
-        if sql.split()[0] != type:
+    def _bad_statement(sql, query_type):
+        if sql.split()[0] != query_type:
             return True
         elif ';' in sql[:-2]:
             return True
